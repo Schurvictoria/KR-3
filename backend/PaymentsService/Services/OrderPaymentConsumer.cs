@@ -49,19 +49,26 @@ namespace PaymentsService.Services
 
                 if (account.Balance >= order.Amount)
                 {
+                    var originalRowVersion = account.RowVersion;
                     account.Balance -= order.Amount;
-                    await dbContext.SaveChangesAsync();
-
-                    // Publish payment success message
-                    var successMessage = new PaymentResponse
+                    try
                     {
-                        OrderId = order.OrderId,
-                        Status = "Success",
-                        UserId = order.UserId
-                    };
-
-                    var successBody = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(successMessage));
-                    _channel.BasicPublish("", "payment-results", null, successBody);
+                        dbContext.Entry(account).OriginalValues["RowVersion"] = originalRowVersion;
+                        await dbContext.SaveChangesAsync();
+                        // Publish payment success message
+                        var successMessage = new PaymentResponse
+                        {
+                            OrderId = order.OrderId,
+                            Status = "Success",
+                            UserId = order.UserId
+                        };
+                        var successBody = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(successMessage));
+                        _channel.BasicPublish("", "payment-results", null, successBody);
+                    }
+                    catch (DbUpdateConcurrencyException)
+                    {
+                        // Конкурентное обновление, не списываем деньги, не отправляем событие
+                    }
                 }
                 else
                 {
@@ -72,7 +79,6 @@ namespace PaymentsService.Services
                         Status = "Failed",
                         UserId = order.UserId
                     };
-
                     var failureBody = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(failureMessage));
                     _channel.BasicPublish("", "payment-results", null, failureBody);
                 }

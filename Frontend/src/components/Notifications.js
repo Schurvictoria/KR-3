@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import * as signalR from "@microsoft/signalr";
 
 export default function Notifications() {
   const [messages, setMessages] = useState([])
@@ -6,13 +7,14 @@ export default function Notifications() {
 
   useEffect(() => {
     if (!userId) return
-    const connection = new window.signalR.HubConnectionBuilder()
-      .withUrl('/notificationhub')
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl('http://localhost:5000/notificationHub')
+      .withAutomaticReconnect()
       .build()
     connection.start().then(() => {
       connection.invoke('Subscribe', userId)
     })
-    connection.on('OrderStatusChanged', msg => {
+    connection.on('SendNotification', msg => {
       setMessages(m => [...m, JSON.stringify(msg)])
     })
     return () => { connection.stop() }

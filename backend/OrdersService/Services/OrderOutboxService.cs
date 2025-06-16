@@ -27,15 +27,17 @@ namespace OrdersService.Services
 
         public void SendOrderForPayment(Order order)
         {
-            var message = new
-            {
-                OrderId = order.Id,
-                UserId = order.UserId,
-                Amount = order.Amount
+            using var scope = _serviceProvider.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
+            var outboxEvent = new OutboxEvent {
+                Payload = JsonSerializer.Serialize(new {
+                    OrderId = order.Id,
+                    UserId = order.UserId,
+                    Amount = order.Amount
+                })
             };
-
-            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
-            _channel.BasicPublish("", QueueName, null, body);
+            dbContext.Add(outboxEvent);
+            dbContext.SaveChanges();
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -44,18 +46,16 @@ namespace OrdersService.Services
             {
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
-
-                var pendingOrders = await dbContext.Orders
-                    .Where(o => o.Status == OrderStatus.Created)
+                var pendingEvents = await dbContext.OutboxEvents
+                    .Where(e => !e.Processed)
                     .ToListAsync(stoppingToken);
-
-                foreach (var order in pendingOrders)
+                foreach (var evt in pendingEvents)
                 {
-                    SendOrderForPayment(order);
-                    order.Status = OrderStatus.Processing;
+                    var body = Encoding.UTF8.GetBytes(evt.Payload);
+                    _channel.BasicPublish("", QueueName, null, body);
+                    evt.Processed = true;
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }
-
                 await Task.Delay(5000, stoppingToken);
             }
         }
@@ -66,5 +66,13 @@ namespace OrdersService.Services
             _connection.Dispose();
             base.Dispose();
         }
+    }
+
+    public class OutboxEvent {
+        public Guid Id { get; set; } = Guid.NewGuid();
+        public string Type { get; set; } = "OrderCreated";
+        public string Payload { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public bool Processed { get; set; } = false;
     }
 }

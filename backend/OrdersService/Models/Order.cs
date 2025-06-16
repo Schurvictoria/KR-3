@@ -10,5 +10,6 @@ namespace OrdersService.Models
         public required string Description { get; set; }
         public required string Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        public byte[] RowVersion { get; set; } // Для CAS
     }
 }

@@ -10,6 +10,7 @@ namespace OrdersService.Data
         }
 
         public DbSet<Order> Orders { get; set; }
+        public DbSet<OutboxEvent> OutboxEvents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -20,6 +21,10 @@ namespace OrdersService.Data
                 entity.Property(e => e.Amount).HasPrecision(18, 2);
                 entity.Property(e => e.Status).IsRequired();
             });
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.RowVersion)
+                .IsRowVersion();
         }
     }
 } 
