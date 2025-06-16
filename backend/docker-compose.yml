@@ -1,0 +1,69 @@
+services:
+  orders-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: orders
+    ports:
+      - "5433:5432"
+    networks:
+      - backend
+  payments-db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payments
+    ports:
+      - "5434:5432"
+    networks:
+      - backend
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    networks:
+      - backend
+  orders-service:
+    build:
+      context: .
+      dockerfile: OrdersService/Dockerfile
+    depends_on:
+      - orders-db
+      - rabbitmq
+    networks:
+      - backend
+  payments-service:
+    build:
+      context: .
+      dockerfile: PaymentsService/Dockerfile
+    depends_on:
+      - payments-db
+      - rabbitmq
+    networks:
+      - backend
+  notification-service:
+    build:
+      context: .
+      dockerfile: NotificationService/Dockerfile
+    depends_on:
+      - rabbitmq
+    networks:
+      - backend
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ApiGateway/Dockerfile
+    depends_on:
+      - orders-service
+      - payments-service
+      - notification-service
+    networks:
+      - backend
+    ports:
+      - "8080:80"
+
+networks:
+  backend:
