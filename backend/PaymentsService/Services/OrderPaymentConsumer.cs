@@ -151,7 +151,6 @@ namespace PaymentsService.Services
         }
     }
 
-    // DTO для запроса на списание
     public class OrderPaymentRequest
     {
         public required string OrderId { get; set; }
@@ -159,7 +158,6 @@ namespace PaymentsService.Services
         public decimal Amount         { get; set; }
     }
 
-    // DTO для ответа после списания
     public class PaymentResponse
     {
         public required string OrderId { get; set; }
