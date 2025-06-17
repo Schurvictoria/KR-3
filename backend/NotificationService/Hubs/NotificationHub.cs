@@ -1,42 +1,47 @@
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
+using System;
+using System.Threading.Tasks;
 
-public class NotificationHub : Hub
+namespace NotificationService.Hubs
 {
-    private readonly ILogger<NotificationHub> _logger;
-
-    public NotificationHub(ILogger<NotificationHub> logger)
+    public class NotificationHub : Hub
     {
-        _logger = logger;
-    }
+        private readonly ILogger<NotificationHub> _logger;
 
-    public override async Task OnConnectedAsync()
-    {
-        _logger.LogInformation($"Client connected: {Context.ConnectionId}");
-        await base.OnConnectedAsync();
-    }
-
-    public override async Task OnDisconnectedAsync(Exception? exception)
-    {
-        _logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
-        if (exception != null)
+        public NotificationHub(ILogger<NotificationHub> logger)
         {
-            _logger.LogError($"Disconnection error: {exception.Message}");
+            _logger = logger;
         }
-        await base.OnDisconnectedAsync(exception);
-    }
 
-    public async Task Subscribe(string userId)
-    {
-        _logger.LogInformation($"User {userId} subscribing to notifications");
-        await Groups.AddToGroupAsync(Context.ConnectionId, userId);
-        await Clients.Caller.SendAsync("Subscribed", $"Successfully subscribed to notifications for user {userId}");
-    }
+        public override async Task OnConnectedAsync()
+        {
+            _logger.LogInformation($"Client connected: {Context.ConnectionId}");
+            await base.OnConnectedAsync();
+        }
 
-    public async Task Unsubscribe(string userId)
-    {
-        _logger.LogInformation($"User {userId} unsubscribing from notifications");
-        await Groups.RemoveFromGroupAsync(Context.ConnectionId, userId);
-        await Clients.Caller.SendAsync("Unsubscribed", $"Successfully unsubscribed from notifications for user {userId}");
+        public override async Task OnDisconnectedAsync(Exception? exception)
+        {
+            _logger.LogInformation($"Client disconnected: {Context.ConnectionId}");
+            if (exception != null)
+            {
+                _logger.LogError($"Disconnection error: {exception.Message}");
+            }
+            await base.OnDisconnectedAsync(exception);
+        }
+
+        public async Task Subscribe(string userId)
+        {
+            _logger.LogInformation($"User {userId} subscribing to notifications");
+            await Groups.AddToGroupAsync(Context.ConnectionId, userId);
+            await Clients.Caller.SendAsync("Subscribed", $"Successfully subscribed to notifications for user {userId}");
+        }
+
+        public async Task Unsubscribe(string userId)
+        {
+            _logger.LogInformation($"User {userId} unsubscribing from notifications");
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, userId);
+            await Clients.Caller.SendAsync("Unsubscribed", $"Successfully unsubscribed from notifications for user {userId}");
+        }
     }
 }

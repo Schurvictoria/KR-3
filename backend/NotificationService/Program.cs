@@ -1,18 +1,21 @@
-using Microsoft.AspNetCore.SignalR.Client;
-using NotifiCationService.Services;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using NotificationService.Hubs;
+using NotificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container
+// Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHostedService<NotificationConsumer>();
 
-// Add SignalR
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<INotificationSender, NotificationSender>();
 
-// Add CORS with specific policy
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("SignalRPolicy", policy =>
@@ -26,14 +29,14 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline
+// HTTP pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
-// app.UseHttpsRedirection(); // если не нужен HTTPS — закомментируй
+// app.UseHttpsRedirection();
 
 app.UseRouting();
 app.UseCors("SignalRPolicy");
@@ -45,4 +48,4 @@ app.UseEndpoints(endpoints =>
     endpoints.MapHub<NotificationHub>("/notificationHub");
 });
 
-app.Run(); 
+app.Run();

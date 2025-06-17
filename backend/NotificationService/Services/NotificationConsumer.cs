@@ -1,28 +1,38 @@
-using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using NotificationService.Hubs;
 
-namespace NotifiCationService.Services
+namespace NotificationService.Services
 {
     public class NotificationConsumer : BackgroundService
     {
+        private readonly INotificationSender _notificationSender;
         private readonly IConnection _connection;
         private readonly IModel _channel;
-        private readonly HubConnection _hubConnection;
         private readonly ILogger<NotificationConsumer> _logger;
         private const string QueueName = "notifications";
 
-        public NotificationConsumer(ILogger<NotificationConsumer> logger, IConfiguration config)
+        public NotificationConsumer(
+            INotificationSender notificationSender,
+            ILogger<NotificationConsumer> logger,
+            IConfiguration config)
         {
+            _notificationSender = notificationSender;
             _logger = logger;
+
             var rabbitHost = config["RabbitMQ:Host"] ?? "rabbitmq";
             var rabbitPort = int.Parse(config["RabbitMQ:Port"] ?? "5672");
             var rabbitUser = config["RabbitMQ:User"] ?? "guest";
             var rabbitPass = config["RabbitMQ:Password"] ?? "guest";
+
             var factory = new ConnectionFactory
             {
                 HostName = rabbitHost,
@@ -31,9 +41,8 @@ namespace NotifiCationService.Services
                 Password = rabbitPass,
                 DispatchConsumersAsync = true
             };
-            int retries = 10;
-            int delayMs = 3000;
-            
+
+            int retries = 10, delayMs = 3000;
             for (int i = 0; i < retries; i++)
             {
                 try
@@ -45,76 +54,46 @@ namespace NotifiCationService.Services
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $"Failed to connect to RabbitMQ. Attempt {i + 1} of {retries}");
+                    _logger.LogError(ex, $"Failed to connect to RabbitMQ. Attempt {i + 1}/{retries}");
                     if (i == retries - 1) throw;
                     Thread.Sleep(delayMs);
                 }
             }
 
             _channel.QueueDeclare(QueueName, durable: true, exclusive: false, autoDelete: false);
-            
-            _hubConnection = new HubConnectionBuilder()
-                .WithUrl("http://localhost:5000/notificationHub")
-                .WithAutomaticReconnect()
-                .Build();
-
-            _hubConnection.On<string>("Subscribed", (message) => 
-                _logger.LogInformation($"Hub subscription confirmed: {message}"));
-            
-            _hubConnection.On<string>("Unsubscribed", (message) => 
-                _logger.LogInformation($"Hub unsubscription confirmed: {message}"));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            try
+            var consumer = new AsyncEventingBasicConsumer(_channel);
+            consumer.Received += async (_, ea) =>
             {
-                await _hubConnection.StartAsync(stoppingToken);
-                _logger.LogInformation("SignalR connection started");
-
-                var consumer = new EventingBasicConsumer(_channel);
-                consumer.Received += async (model, ea) =>
+                try
                 {
-                    try
+                    var message = Encoding.UTF8.GetString(ea.Body.ToArray());
+                    var notification = JsonSerializer.Deserialize<NotificationMessage>(message);
+                    if (notification != null)
                     {
-                        var body = ea.Body.ToArray();
-                        var message = Encoding.UTF8.GetString(body);
-                        var notification = JsonSerializer.Deserialize<NotificationMessage>(message);
-
-                        if (notification != null)
-                        {
-                            _logger.LogInformation($"Sending notification to user {notification.UserId}: {notification.Message}");
-                            await _hubConnection.InvokeAsync("SendNotification", 
-                                notification.UserId, 
-                                notification.Message,
-                                stoppingToken);
-                        }
+                        _logger.LogInformation($"Sending notification to user {notification.UserId}");
+                        await _notificationSender.SendStatusUpdate(notification.UserId, notification.Message);
                     }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error processing notification message");
-                    }
-                };
-
-                _channel.BasicConsume(QueueName, true, consumer);
-                _logger.LogInformation("Started consuming messages from RabbitMQ");
-
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    await Task.Delay(1000, stoppingToken);
                 }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error in notification consumer");
-                throw;
-            }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error processing notification message");
+                }
+            };
+
+            _channel.BasicConsume(QueueName, autoAck: true, consumer);
+            _logger.LogInformation("Started consuming messages from RabbitMQ");
+
+            while (!stoppingToken.IsCancellationRequested)
+                await Task.Delay(1000, stoppingToken);
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Stopping notification consumer");
-            await _hubConnection.DisposeAsync();
             _channel.Dispose();
             _connection.Dispose();
             await base.StopAsync(cancellationToken);
@@ -126,4 +105,4 @@ namespace NotifiCationService.Services
         public required string UserId { get; set; }
         public required string Message { get; set; }
     }
-} 
+}
