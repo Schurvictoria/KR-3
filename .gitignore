@@ -37,3 +37,13 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db 
+
+# React / Node.js
+Frontend/node_modules/
+Frontend/.cache/
+Frontend/build/
+Frontend/.env
+
+# .NET
+**/bin/
+**/obj/
