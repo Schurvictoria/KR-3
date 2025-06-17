@@ -1,20 +1,22 @@
+using System;
+
 namespace Shared.Models
 {
+    public enum OrderStatus
+    {
+        Created,
+        Processing,
+        Completed,
+        Cancelled
+    }
+
     public class Order
     {
         public Guid Id { get; set; }
-        public required string UserId { get; set; }
+        public string UserId { get; set; } = string.Empty;
         public decimal Amount { get; set; }
-        public required string Description { get; set; }
-        public string Status { get; set; } = "Created";
+        public string Description { get; set; } = string.Empty;
+        public OrderStatus Status { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    }
-
-    public static class OrderStatus
-    {
-        public const string Created = "Created";
-        public const string Processing = "Processing";
-        public const string Completed = "Completed";
-        public const string Cancelled = "Cancelled";
     }
 } 

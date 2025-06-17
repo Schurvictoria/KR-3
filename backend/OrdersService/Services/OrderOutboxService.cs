@@ -4,6 +4,7 @@ using RabbitMQ.Client;
 using Shared.Models;
 using System.Text;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace OrdersService.Services
 {
@@ -13,10 +14,12 @@ namespace OrdersService.Services
         private readonly IConnection _connection;
         private readonly IModel _channel;
         private const string QueueName = "order-payments";
+        private readonly OrdersDbContext _db;
 
-        public OrderOutboxService(IServiceProvider serviceProvider)
+        public OrderOutboxService(IServiceProvider serviceProvider, OrdersDbContext db)
         {
             _serviceProvider = serviceProvider;
+            _db = db;
 
             var factory = new ConnectionFactory { HostName = "localhost" };
             _connection = factory.CreateConnection();
@@ -25,16 +28,20 @@ namespace OrdersService.Services
             _channel.QueueDeclare(QueueName, durable: true, exclusive: false, autoDelete: false);
         }
 
-        public void SendOrderForPayment(Order order)
+        public void SendOrderForPayment(Shared.Models.Order order)
         {
             using var scope = _serviceProvider.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
-            var outboxEvent = new OutboxEvent {
+            var outboxEvent = new Shared.Models.OutboxEvent {
+                Id = Guid.NewGuid(),
+                Type = "OrderCreated",
                 Payload = JsonSerializer.Serialize(new {
                     OrderId = order.Id,
                     UserId = order.UserId,
                     Amount = order.Amount
-                })
+                }),
+                OccurredAt = DateTime.UtcNow,
+                IsProcessed = false
             };
             dbContext.Add(outboxEvent);
             dbContext.SaveChanges();
@@ -47,13 +54,13 @@ namespace OrdersService.Services
                 using var scope = _serviceProvider.CreateScope();
                 var dbContext = scope.ServiceProvider.GetRequiredService<OrdersDbContext>();
                 var pendingEvents = await dbContext.OutboxEvents
-                    .Where(e => !e.Processed)
+                    .Where(e => !e.IsProcessed)
                     .ToListAsync(stoppingToken);
                 foreach (var evt in pendingEvents)
                 {
                     var body = Encoding.UTF8.GetBytes(evt.Payload);
                     _channel.BasicPublish("", QueueName, null, body);
-                    evt.Processed = true;
+                    evt.IsProcessed = true;
                     await dbContext.SaveChangesAsync(stoppingToken);
                 }
                 await Task.Delay(5000, stoppingToken);
@@ -66,13 +73,15 @@ namespace OrdersService.Services
             _connection.Dispose();
             base.Dispose();
         }
-    }
 
-    public class OutboxEvent {
-        public Guid Id { get; set; } = Guid.NewGuid();
-        public string Type { get; set; } = "OrderCreated";
-        public string Payload { get; set; } = string.Empty;
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public bool Processed { get; set; } = false;
+        public async Task MarkEventProcessedAsync(Guid eventId)
+        {
+            var evt = await _db.Outbox.FindAsync(eventId);
+            if (evt != null)
+            {
+                evt.IsProcessed = true;
+                await _db.SaveChangesAsync();
+            }
+        }
     }
 }

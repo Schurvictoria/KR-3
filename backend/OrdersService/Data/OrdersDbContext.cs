@@ -5,26 +5,19 @@ namespace OrdersService.Data
 {
     public class OrdersDbContext : DbContext
     {
-        public OrdersDbContext(DbContextOptions<OrdersDbContext> options) : base(options)
+        public OrdersDbContext(DbContextOptions<OrdersDbContext> options)
+            : base(options)
         {
         }
 
-        public DbSet<Order> Orders { get; set; }
-        public DbSet<OutboxEvent> OutboxEvents { get; set; }
+        public DbSet<Shared.Models.Order> Orders { get; set; }
+        public DbSet<Shared.Models.OutboxEvent> Outbox { get; set; }
+        public DbSet<Shared.Models.OutboxEvent> OutboxEvents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Order>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.UserId).IsRequired();
-                entity.Property(e => e.Amount).HasPrecision(18, 2);
-                entity.Property(e => e.Status).IsRequired();
-            });
-
-            modelBuilder.Entity<Order>()
-                .Property(o => o.RowVersion)
-                .IsRowVersion();
+            modelBuilder.Entity<Shared.Models.OutboxEvent>()
+                        .ToTable("Outbox");
         }
     }
 } 
