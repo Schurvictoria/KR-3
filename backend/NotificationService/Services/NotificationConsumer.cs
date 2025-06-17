@@ -15,12 +15,24 @@ namespace NotifiCationService.Services
 
         public NotificationConsumer()
         {
-            var factory = new ConnectionFactory { HostName = "localhost" };
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
-
+            var factory = new ConnectionFactory { HostName = "rabbitmq" };
+            int retries = 10;
+            int delayMs = 3000;
+            for (int i = 0; i < retries; i++)
+            {
+                try
+                {
+                    _connection = factory.CreateConnection();
+                    _channel = _connection.CreateModel();
+                    break;
+                }
+                catch
+                {
+                    if (i == retries - 1) throw;
+                    Thread.Sleep(delayMs);
+                }
+            }
             _channel.QueueDeclare(QueueName, durable: true, exclusive: false, autoDelete: false);
-
             _hubConnection = new HubConnectionBuilder()
                 .WithUrl("http://localhost:5000/notificationHub")
                 .WithAutomaticReconnect()
