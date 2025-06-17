@@ -1,5 +1,8 @@
 import React, { useEffect } from 'react'
 import connection from './signalr'
+import OrdersList from './components/OrdersList';
+import OrderForm from './components/OrderForm';
+import Notifications from './components/Notifications';
 
 const App = () => {
   useEffect(() => {
@@ -14,7 +17,10 @@ const App = () => {
 
   return (
     <div>
-      <h1>Hello world</h1>
+      <h1>Интернет-магазин</h1>
+      <OrderForm />
+      <OrdersList />
+      <Notifications />
     </div>
   )
 }

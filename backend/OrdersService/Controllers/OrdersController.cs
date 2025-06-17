@@ -41,6 +41,19 @@ namespace OrdersService.Controllers
                     {
                         order.Status = result.Status == "FINISHED" ? OrderStatus.Completed : OrderStatus.Cancelled;
                         _db.SaveChanges();
+
+                        // Отправка уведомления в очередь notifications
+                        var factoryNotif = new RabbitMQ.Client.ConnectionFactory() { HostName = _config["RabbitMq:Host"] ?? "localhost" };
+                        using var connNotif = factoryNotif.CreateConnection();
+                        using var channelNotif = connNotif.CreateModel();
+                        channelNotif.QueueDeclare(queue: "notifications", durable: false, exclusive: false, autoDelete: false, arguments: null);
+
+                        var notif = new {
+                            UserId = order.UserId,
+                            Message = $"Order {order.Id} status: {order.Status}"
+                        };
+                        var notifBody = System.Text.Encoding.UTF8.GetBytes(System.Text.Json.JsonSerializer.Serialize(notif));
+                        channelNotif.BasicPublish(exchange: "", routingKey: "notifications", mandatory: false, basicProperties: null, body: notifBody);
                     }
                 }
             };
