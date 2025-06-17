@@ -16,7 +16,7 @@ export default function OrdersList() {
     setError('')
     
     try {
-      const res = await fetch(`/orders?userId=${userId}`)
+      const res = await fetch(`http://localhost:8080/api/orders/user/${userId}`)
       if (!res.ok) {
         throw new Error(`HTTP error! status: ${res.status}`)
       }

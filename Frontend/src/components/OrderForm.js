@@ -13,7 +13,7 @@ export default function OrderForm() {
     setError('')
     
     try {
-      const response = await fetch('/orders', {
+      const response = await fetch('http://localhost:8080/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount: Number(amount), description })
