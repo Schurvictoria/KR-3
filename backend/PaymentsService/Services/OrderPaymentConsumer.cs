@@ -1,5 +1,4 @@
 // PaymentsService/Services/OrderPaymentConsumer.cs
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,7 +17,6 @@ namespace PaymentsService.Services
 {
     public class OrderPaymentConsumer : BackgroundService
     {
-        private readonly IConnection _connection;
         private readonly IModel _channel;
         private readonly IServiceProvider _serviceProvider;
         private const string QueueName = "order-payments";
@@ -27,126 +25,112 @@ namespace PaymentsService.Services
         {
             _serviceProvider = serviceProvider;
 
-            // Читаем параметры RabbitMQ из окружения (docker-compose)
-            var rabbitHost = config["RabbitMQ:Host"] ?? "rabbitmq";
-            var rabbitPort = int.TryParse(config["RabbitMQ:Port"], out var p) ? p : 5672;
-            var rabbitUser = config["RabbitMQ:User"] ?? "guest";
-            var rabbitPass = config["RabbitMQ:Password"] ?? "guest";
-
             var factory = new ConnectionFactory
             {
-                HostName = rabbitHost,
-                Port = (ushort)rabbitPort,
-                UserName = rabbitUser,
-                Password = rabbitPass,
+                HostName            = config["RabbitMQ:Host"]     ?? "rabbitmq",
+                Port                = ushort.Parse(config["RabbitMQ:Port"] ?? "5672"),
+                UserName            = config["RabbitMQ:User"]     ?? "guest",
+                Password            = config["RabbitMQ:Password"] ?? "guest",
                 DispatchConsumersAsync = true
             };
 
-            // Пытаемся подключиться с ретраями
-            const int maxAttempts = 5;
-            const int delayMs = 3000;
-            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            // простой retry
+            IConnection conn = null;
+            for (var i = 0; i < 5; i++)
             {
-                try
-                {
-                    _connection = factory.CreateConnection();
-                    break;
-                }
-                catch (Exception ex) when (attempt < maxAttempts)
-                {
-                    Console.WriteLine($"RabbitMQ connection attempt {attempt} failed: {ex.Message}. Retrying in {delayMs}ms...");
-                    Thread.Sleep(delayMs);
-                }
+                try { conn = factory.CreateConnection(); break; }
                 catch
                 {
-                    throw;
+                    Thread.Sleep(3000);
+                    if (i == 4) throw;
                 }
             }
 
-            _channel = _connection.CreateModel();
-            _channel.QueueDeclare(
-                queue: QueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false);
+            _channel = conn.CreateModel();
+            _channel.QueueDeclare(queue: QueueName,
+                                  durable: true,
+                                  exclusive: false,
+                                  autoDelete: false);
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var consumer = new AsyncEventingBasicConsumer(_channel);
-            consumer.Received += async (sender, ea) =>
+            consumer.Received += async (s, ea) =>
             {
-                var body    = ea.Body.ToArray();
-                var message = Encoding.UTF8.GetString(body);
-                var order   = JsonSerializer.Deserialize<OrderPaymentRequest>(message);
-                if (order == null) return;
+                var json        = Encoding.UTF8.GetString(ea.Body.ToArray());
+                var orderReq    = JsonSerializer.Deserialize<OrderPaymentRequest>(json);
+                if (orderReq is null) return;
 
-                using var scope     = _serviceProvider.CreateScope();
-                var dbContext       = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
+                using var scope = _serviceProvider.CreateScope();
+                var db          = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
 
-                var account = await dbContext.Accounts
-                                             .FirstOrDefaultAsync(a => a.UserId == order.UserId, stoppingToken);
-                if (account == null) return;
+                // 1) Сохраняем inbox
+                var inbox = new PaymentInboxEvent {
+                    Id          = Guid.NewGuid(),
+                    Type        = "OrderPaymentRequest",
+                    Payload     = json,
+                    OccurredAt  = DateTime.UtcNow,
+                    IsProcessed = false
+                };
+                db.PaymentInboxEvents.Add(inbox);
+                await db.SaveChangesAsync(stoppingToken);
 
-                if (account.Balance >= order.Amount)
+                // 2) Бизнес-логика
+                var account = await db.Accounts
+                    .FirstOrDefaultAsync(a => a.UserId == orderReq.UserId, stoppingToken);
+                
+                var response = new PaymentResponse {
+                    OrderId = orderReq.OrderId,
+                    UserId  = orderReq.UserId,
+                    Status  = (account != null && account.Balance >= orderReq.Amount)
+                                ? "Success"
+                                : "Failed"
+                };
+
+                if (response.Status == "Success")
                 {
                     var originalRV = account.RowVersion;
-                    account.Balance -= order.Amount;
+                    account.Balance -= orderReq.Amount;
+                    db.Entry(account).OriginalValues["RowVersion"] = originalRV;
                     try
                     {
-                        dbContext.Entry(account).OriginalValues["RowVersion"] = originalRV;
-                        await dbContext.SaveChangesAsync(stoppingToken);
-
-                        var success = new PaymentResponse
-                        {
-                            OrderId = order.OrderId,
-                            Status  = "Success",
-                            UserId  = order.UserId
-                        };
-                        var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(success));
-                        _channel.BasicPublish(
-                            exchange: "",
-                            routingKey: "payment-results",
-                            basicProperties: null,
-                            body: bytes);
+                        await db.SaveChangesAsync(stoppingToken);
                     }
                     catch (DbUpdateConcurrencyException)
                     {
-                        // конфликт – пропускаем
+                        // при конфликте просто не проводим платёж
+                        response.Status = "Failed";
                     }
                 }
-                else
-                {
-                    var failure = new PaymentResponse
-                    {
-                        OrderId = order.OrderId,
-                        Status  = "Failed",
-                        UserId  = order.UserId
-                    };
-                    var bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(failure));
-                    _channel.BasicPublish(
-                        exchange: "",
-                        routingKey: "payment-results",
-                        basicProperties: null,
-                        body: bytes);
-                }
+
+                // 3) Отмечаем inbox как обработанный
+                inbox.IsProcessed = true;
+                await db.SaveChangesAsync(stoppingToken);
+
+                // 4) Создаём outbox
+                var outbox = new PaymentOutboxEvent {
+                    Id          = Guid.NewGuid(),
+                    Type        = "PaymentResult",
+                    Payload     = JsonSerializer.Serialize(response),
+                    OccurredAt  = DateTime.UtcNow,
+                    IsProcessed = false
+                };
+                db.PaymentOutboxEvents.Add(outbox);
+                await db.SaveChangesAsync(stoppingToken);
             };
 
-            _channel.BasicConsume(
-                queue: QueueName,
-                autoAck: true,
-                consumer: consumer);
+            _channel.BasicConsume(queue: QueueName,
+                                  autoAck: true,
+                                  consumer: consumer);
 
-            while (!stoppingToken.IsCancellationRequested)
-            {
-                await Task.Delay(1000, stoppingToken);
-            }
+            // держим сервис живым
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
 
         public override void Dispose()
         {
             _channel?.Dispose();
-            _connection?.Dispose();
             base.Dispose();
         }
     }

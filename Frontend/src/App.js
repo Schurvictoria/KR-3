@@ -1,28 +1,31 @@
-import React, { useEffect } from 'react'
-import connection from './signalr'
+import React from 'react';
 import OrdersList from './components/OrdersList';
 import OrderForm from './components/OrderForm';
 import Notifications from './components/Notifications';
+import './App.css';
 
 const App = () => {
-  useEffect(() => {
-    connection.start().then(() => {
-      const userId = localStorage.getItem("userId");
-      if (userId) connection.invoke("Subscribe", userId);
-    });
-    connection.on("SendNotification", (message) => {
-      alert(message);
-    });
-  }, [])
-
   return (
-    <div>
-      <h1>Интернет-магазин</h1>
-      <OrderForm />
-      <OrdersList />
-      <Notifications />
+    <div className="container">
+      <header>
+        <h1>🛒 Интернет-магазин</h1>
+      </header>
+      <main>
+        <section className="order-section">
+          <OrderForm />
+        </section>
+        <section className="orders-list-section">
+          <OrdersList />
+        </section>
+        <section className="notifications-section">
+          <Notifications />
+        </section>
+      </main>
+      <footer>
+        <p>© 2024 Магазин мечты</p>
+      </footer>
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;

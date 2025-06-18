@@ -20,7 +20,7 @@ export default function OrderForm() {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
+        throw new Error(`Ошибка HTTP! статус: ${response.status}`)
       }
 
       setStatus('success')
@@ -34,17 +34,15 @@ export default function OrderForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <div>
-        <input placeholder='User ID' value={userId} onChange={e => setUserId(e.target.value)} />
-        <input placeholder='Amount' value={amount} onChange={e => setAmount(e.target.value)} />
-        <input placeholder='Description' value={description} onChange={e => setDescription(e.target.value)} />
-        <button type='submit' disabled={status === 'loading'}>
-          {status === 'loading' ? 'Creating...' : 'Create Order'}
-        </button>
-      </div>
-      {status === 'success' && <div style={{ color: 'green' }}>Order created successfully!</div>}
-      {error && <div style={{ color: 'red' }}>Error: {error}</div>}
+    <form onSubmit={handleSubmit} className="order-form">
+      <input placeholder="Идентификатор пользователя" value={userId} onChange={e => setUserId(e.target.value)} />
+      <input placeholder="Сумма" value={amount} onChange={e => setAmount(e.target.value)} type="number" min="1" />
+      <input placeholder="Описание" value={description} onChange={e => setDescription(e.target.value)} />
+      <button type="submit" disabled={status === 'loading'}>
+        {status === 'loading' ? 'Создание...' : 'Создать Заказ'}
+      </button>
+      {status === 'success' && <div style={{ color: 'green', marginTop: 8 }}>Заказ успешно создан!</div>}
+      {error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
     </form>
   )
 }

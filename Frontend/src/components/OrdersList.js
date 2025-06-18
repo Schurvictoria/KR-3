@@ -8,7 +8,7 @@ export default function OrdersList() {
 
   const fetchOrders = async () => {
     if (!userId) {
-      setError('Please enter a User ID')
+      setError('Пожалуйста, введите идентификатор пользователя')
       return
     }
 
@@ -18,7 +18,7 @@ export default function OrdersList() {
     try {
       const res = await fetch(`http://localhost:8080/api/orders/user/${userId}`)
       if (!res.ok) {
-        throw new Error(`HTTP error! status: ${res.status}`)
+        throw new Error(`Ошибка HTTP! статус: ${res.status}`)
       }
       const data = await res.json()
       setOrders(data)
@@ -31,10 +31,10 @@ export default function OrdersList() {
   }
 
   return (
-    <div>
-      <div>
+    <div className="orders-list">
+      <div style={{ marginBottom: 8 }}>
         <input 
-          placeholder='User ID' 
+          placeholder='Идентификатор пользователя' 
           value={userId} 
           onChange={e => setUserId(e.target.value)} 
         />
@@ -42,20 +42,20 @@ export default function OrdersList() {
           onClick={fetchOrders} 
           disabled={loading}
         >
-          {loading ? 'Loading...' : 'Get Orders'}
+          {loading ? 'Загрузка...' : 'Получать Заказы'}
         </button>
       </div>
       
-      {error && <div style={{ color: 'red' }}>Error: {error}</div>}
+      {error && <div style={{ color: 'red', marginBottom: 8 }}>{error}</div>}
       
       {orders.length === 0 && !loading && !error && (
-        <div>No orders found</div>
+        <div style={{ color: '#a0aec0' }}>Заказы не найдены</div>
       )}
       
       <ul>
         {orders.map(o => (
           <li key={o.id}>
-            {o.description} - {o.amount} - {o.status}
+            <b>{o.description}</b> — {o.amount} ₽ — <span style={{ color: o.status === 'Completed' ? 'green' : o.status === 'Cancelled' ? 'red' : '#2d3748' }}>{o.status}</span>
           </li>
         ))}
       </ul>

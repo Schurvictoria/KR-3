@@ -4,11 +4,12 @@ using PaymentsService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Add CORS
+// Configure CORS
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -18,12 +19,24 @@ builder.Services.AddCors(options =>
               .AllowCredentials());
 });
 
+// Configure DbContext
 builder.Services.AddDbContext<PaymentsDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Register background services
 builder.Services.AddHostedService<OrderPaymentConsumer>();
+builder.Services.AddHostedService<PaymentOutboxPublisher>();
 
 var app = builder.Build();
 
+// Apply pending migrations on startup
+ing using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
+    db.Database.Migrate();
+}
+
+// Configure the HTTP request pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -39,4 +52,4 @@ app.UseEndpoints(endpoints =>
     endpoints.MapControllers();
 });
 
-app.Run(); 
+app.Run();

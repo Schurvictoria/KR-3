@@ -7,6 +7,8 @@ namespace PaymentsService.Data
     {
         public PaymentsDbContext(DbContextOptions<PaymentsDbContext> options) : base(options) { }
         public DbSet<Account> Accounts { get; set; }
+        public DbSet<PaymentInboxEvent> PaymentInboxEvents { get; set; }
+        public DbSet<PaymentOutboxEvent> PaymentOutboxEvents { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

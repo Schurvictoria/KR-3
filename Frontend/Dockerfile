@@ -1,11 +1,10 @@
 # Сборка приложения
-FROM node:18-alpine
+FROM node:18-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm install
 COPY . .
-EXPOSE 3000
-CMD ["npm", "start"]
+RUN npm run build
 
 # Сервер для статики
 FROM nginx:alpine

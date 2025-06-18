@@ -26,12 +26,11 @@ export default function Notifications() {
     }
 
     connection.on('SendNotification', msg => {
-      setMessages(m => [...m, JSON.stringify(msg)])
+      setMessages(m => [...m, typeof msg === 'string' ? msg : JSON.stringify(msg)])
     })
 
-    connection.onclose(error => {
+    connection.onclose(() => {
       setConnectionStatus('disconnected')
-      console.error('Connection closed:', error)
     })
 
     startConnection()
@@ -42,10 +41,19 @@ export default function Notifications() {
   }, [userId])
 
   return (
-    <div>
-      <div>Connection status: {connectionStatus}</div>
-      <input placeholder='User ID' value={userId} onChange={e => setUserId(e.target.value)} />
-      {messages.map((m, i) => <div key={i}>{m}</div>)}
+    <div className="notifications">
+      <div style={{ marginBottom: 8 }}>
+        <b>Push-уведомления</b>
+        <div style={{ fontSize: 13, color: connectionStatus === 'connected' ? 'green' : 'red' }}>
+          Состояние подключения: {connectionStatus}
+        </div>
+        <input placeholder='Идентификатор пользователя' value={userId} onChange={e => setUserId(e.target.value)} />
+      </div>
+      <ul>
+        {messages.map((m, i) => (
+          <li key={i} style={{ color: '#2563eb', marginBottom: 4 }}>{m}</li>
+        ))}
+      </ul>
     </div>
   )
 }

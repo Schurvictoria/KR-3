@@ -54,10 +54,8 @@ services:
       - payments-db
       - rabbitmq
     environment:
-      - RabbitMQ__Host=rabbitmq
-      - RabbitMQ__Port=5672
-      - RabbitMQ__User=guest
-      - RabbitMQ__Password=guest
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=payments-db;Database=payments;Username=postgres;Password=postgres
     networks:
       - backend
     ports:
@@ -91,6 +89,15 @@ services:
       - backend
     ports:
       - "8080:80"
+
+  frontend:
+    build:
+      context: ../Frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    networks:
+      - backend
 
 networks:
   backend:
