@@ -5,7 +5,6 @@ using System.Net.Http;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add CORS
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
@@ -19,7 +18,6 @@ builder.Services.AddHttpClient();
 
 var app = builder.Build();
 
-// Use CORS
 app.UseCors();
 
 app.Map("/orders/{**rest}", async (HttpContext context, IHttpClientFactory httpClientFactory) =>

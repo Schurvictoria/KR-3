@@ -42,7 +42,6 @@ namespace OrdersService.Controllers
                         order.Status = result.Status == "FINISHED" ? OrderStatus.Completed : OrderStatus.Cancelled;
                         _db.SaveChanges();
 
-                        // Отправка уведомления в очередь notifications
                         var factoryNotif = new RabbitMQ.Client.ConnectionFactory() { HostName = _config["RabbitMq:Host"] ?? "localhost" };
                         using var connNotif = factoryNotif.CreateConnection();
                         using var channelNotif = connNotif.CreateModel();
@@ -88,7 +87,6 @@ namespace OrdersService.Controllers
             _db.Orders.Add(order);
             await _db.SaveChangesAsync();
 
-            // Outbox: отправить задачу на оплату
             _outboxService.SendOrderForPayment(order);
 
             return Ok(order);

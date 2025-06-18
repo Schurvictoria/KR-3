@@ -6,8 +6,8 @@ const connection = new signalR.HubConnectionBuilder()
     skipNegotiation: false,
     transport: signalR.HttpTransportType.WebSockets
   })
-  .withAutomaticReconnect([0, 2000, 5000, 10000, 20000]) // Retry intervals
-  .configureLogging(signalR.LogLevel.Debug) // Enable detailed logging
+  .withAutomaticReconnect([0, 2000, 5000, 10000, 20000])
+  .configureLogging(signalR.LogLevel.Debug)
   .build();
 
 // Add connection state logging

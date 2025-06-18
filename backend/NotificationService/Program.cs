@@ -7,7 +7,6 @@ using NotificationService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -29,7 +28,6 @@ builder.Services.AddCors(options =>
 
 var app = builder.Build();
 
-// HTTP pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

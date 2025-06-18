@@ -18,21 +18,18 @@ namespace OrdersService.Services
             _rabbit = rabbit;
         }
 
-        // Реализация метода из интерфейса
         public async Task<Guid> CreateOrderAsync(string product, decimal amount)
         {
-            // Создаём заказ
             var order = new Shared.Models.Order
             {
                 Id = Guid.NewGuid(),
-                UserId = product,             // здесь product используем как идентификатор пользователя
+                UserId = product,
                 Amount = amount,
-                Description = string.Empty,   // описание сейчас пустое
+                Description = string.Empty,
                 Status = Shared.Models.OrderStatus.Created
             };
             _db.Orders.Add(order);
 
-            // Создаём событие в outbox
             _db.OutboxEvents.Add(new Shared.Models.OutboxEvent
             {
                 Id = Guid.NewGuid(),
