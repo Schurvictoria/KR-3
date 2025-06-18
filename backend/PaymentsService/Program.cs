@@ -30,7 +30,7 @@ builder.Services.AddHostedService<PaymentOutboxPublisher>();
 var app = builder.Build();
 
 // Apply pending migrations on startup
-ing using (var scope = app.Services.CreateScope())
+using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PaymentsDbContext>();
     db.Database.Migrate();
